@@ -6,14 +6,15 @@ A Tokyo Night–themed desktop GUI for managing local development services on Li
 
 ## What it manages
 
-| Service | Icon | What it is |
-|---|---|---|
-| MySQL | 🐬 | Relational database |
-| PostgreSQL | 🐘 | Relational database |
-| MongoDB | 🍃 | Document database |
-| Redis | 🔴 | In-memory key-value store |
-| Docker | 🐳 | Container runtime |
-| Nginx | ⚡ | Web server / reverse proxy |
+| Service | Icon | What it is | Default port |
+|---|---|---|---|
+| MySQL | 🐬 | Relational database | 3306 |
+| PostgreSQL | 🐘 | Relational database | 5432 |
+| MongoDB | 🍃 | Document database | 27017 |
+| Redis | 🔴 | In-memory key-value store | 6379 |
+| Docker | 🐳 | Container runtime | — |
+| Nginx | ⚡ | Web server / reverse proxy | 80 |
+| FileZilla | 📂 | FTP/SFTP client (launcher) | — |
 
 ---
 
@@ -35,7 +36,7 @@ sudo apt install python3-tk
 
 ### 2. pkexec (PolicyKit)
 
-The panel uses `pkexec` to run `systemctl` commands with root privileges — it triggers a GUI password popup instead of requiring `sudo` in a terminal. It's pre-installed on Linux Mint. Verify:
+The panel uses `pkexec` to run `systemctl` commands with root privileges — it triggers a GUI password popup instead of requiring `sudo` in a terminal. Pre-installed on Linux Mint. Verify:
 
 ```bash
 which pkexec
@@ -44,6 +45,14 @@ which pkexec
 ### 3. journalctl
 
 Used by the Logs window to pull service output. Comes with `systemd`, which is already on your system.
+
+### 4. FileZilla (optional)
+
+Only needed if you want the FileZilla launcher row to work:
+
+```bash
+sudo apt install filezilla
+```
 
 ---
 
@@ -90,30 +99,35 @@ python3 ~/.local/bin/dbcontrol-gui.py
 ## UI overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  ⚙  Service Control Panel                       HH:MM:SS       │
-├──────────────────────────────────────────────────────────────── │
-│  · SERVICE    STATUS       UPTIME   BOOT      [▶][■][↺][📋]    │
-│  ● MySQL      ● running    2h 14m   auto-start                  │
-│  ○ PostgreSQL ○ stopped             manual                      │
-│  ● MongoDB    ● running    45m      auto-start                  │
-│  ○ Redis      ○ stopped             manual                      │
-│  ● Docker     ● running    3h 02m   auto-start                  │
-│  ○ Nginx      ○ stopped             manual                      │
-├─────────────────────────────────────────────────────────────────│
-│  3/6 services running • last refreshed 14:22:01   [↻ Refresh]  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  ⚙  Service Control Panel                                    Friday 26 Jun 14:22 │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│  · SERVICE      STATUS      PORT       UPTIME  CPU    RAM    BOOT                │
+│  ● MySQL        ● running   :3306 ●    2h14m   1.2s   48.3M  ☑ auto  ▶ ■ ↺ 📋  │
+│  ○ PostgreSQL   ○ stopped   :5432 ○            —      —      ☐ auto  ▶ ■ ↺ 📋  │
+│  ● MongoDB      ● running   :27017 ●   45m     0.4s   91.0M  ☑ auto  ▶ ■ ↺ 📋  │
+│  ○ Redis        ○ stopped   :6379 ○            —      —      ☐ auto  ▶ ■ ↺ 📋  │
+│  ● Docker       ● running              3h02m   2.1s   112M   ☑ auto  ▶ ■ ↺ 📋  │
+│  ○ Nginx        ○ stopped   :80 ○              —      —      ☐ auto  ▶ ■ ↺ 📋  │
+│  ─────────────────────────────────────────────────────────────────────────────── │
+│  📂 FileZilla   launcher                                      📂 open FileZilla  │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│  3/6 services running  •  last refreshed 14:22:01                  ↻ Refresh All │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Columns
 
 | Column | Description |
 |---|---|
-| Dot | Animated pulse (green = running, red = stopped, amber = working) |
+| Dot | Animated pulse — green (running), red (stopped), amber (working) |
 | Service | Name and icon |
 | Status | `● running` or `○ stopped` or `not installed` |
-| Uptime | How long the service has been active (only shown when running) |
-| Boot | `auto-start` = starts on boot; `manual` = stays off until you start it |
+| Port | Whether the service's default port is actually bound — catches crash-on-start |
+| Uptime | How long the service has been active (running only) |
+| CPU | Cumulative CPU time from `systemctl show` (purple) |
+| RAM | Current memory usage from cgroups (cyan) |
+| Boot | Checkbox — tick to enable autostart, untick to disable. Triggers pkexec. |
 
 ### Buttons
 
@@ -123,45 +137,37 @@ python3 ~/.local/bin/dbcontrol-gui.py
 | ■ stop | `systemctl stop <service>` |
 | ↺ restart | `systemctl restart <service>` |
 | 📋 logs | Opens a log window pulling from `journalctl` |
+| 📂 open FileZilla | Launches FileZilla as a regular app (no pkexec needed) |
 
-> All start/stop/restart actions trigger a **pkexec password popup** — this is expected. The panel never stores your password.
+> Start/Stop/Restart and the Boot checkbox all trigger a **pkexec password popup** — this is expected. The panel never stores your password.
+
+### Port indicator
+
+The port column does a real TCP connection check (not just a systemd state check). This catches the case where a service reports `active` but immediately crashed — the port will show `○` even if systemd thinks it's running.
+
+| Indicator | Meaning |
+|---|---|
+| `:3306 ●` (green) | Port is bound and accepting connections |
+| `:3306 ○` (red) | Port is not bound — service may have crashed |
+| `:80 ○` (muted) | Service is stopped, port is free (expected) |
+
+### Boot checkbox
+
+Ticking or unticking the **auto** checkbox runs `systemctl enable` or `systemctl disable` via pkexec. The checkbox re-reads the actual enabled state after the operation, so you always see what systemd actually recorded.
 
 ### Log window
 
-Click **📋 logs** on any row to open a live log viewer for that service. Lines are color-coded:
+Click **📋 logs** on any row to open a live log viewer for that service, pulling the last 60 lines from `journalctl`. Color-coded:
 
 - 🔴 Red — `error`, `failed`, `fatal`, `crit`
 - 🟡 Amber — `warn`, `notice`
 - 🟢 Green — `start`, `ready`, `success`, `listening`
 
-Click **↻ refresh** inside the log window to pull the latest entries.
+Click **↻ refresh** to pull the latest entries.
 
 ### Auto-refresh
 
-The panel refreshes all service statuses every **8 seconds** automatically. Click **↻ Refresh All** in the footer to trigger it manually.
-
----
-
-## Enable / disable autostart
-
-The panel shows whether each service starts on boot, but toggling it requires a terminal command:
-
-```bash
-# make a service start on boot
-sudo systemctl enable <service>
-
-# prevent a service from starting on boot
-sudo systemctl disable <service>
-
-# check current state
-systemctl is-enabled <service>
-```
-
-Example — disable Nginx autostart (good for local dev where you start it manually):
-
-```bash
-sudo systemctl disable nginx
-```
+All rows refresh automatically every **8 seconds**. Click **↻ Refresh All** in the footer to trigger immediately.
 
 ---
 
@@ -174,7 +180,7 @@ A widely used **relational database** (SQL). Stores data in tables with rows and
 **Install:**
 ```bash
 sudo apt install mysql-server
-sudo mysql_secure_installation   # run after install to set root password
+sudo mysql_secure_installation
 ```
 
 **When to use it:**
@@ -182,13 +188,19 @@ sudo mysql_secure_installation   # run after install to set root password
 - Projects that need strict schema enforcement
 - When your team or client already uses MySQL in production
 
+**`.env` connection string:**
+```
+DATABASE_URL=mysql://root:password@localhost:3306/mydb
+```
+
 **Key files:**
 - Config: `/etc/mysql/mysql.conf.d/mysqld.cnf`
 - Data: `/var/lib/mysql/`
+- Logs: `/var/log/mysql/error.log`
 
 **Common commands:**
 ```bash
-mysql -u root -p              # open MySQL shell
+mysql -u root -p
 SHOW DATABASES;
 CREATE DATABASE myapp;
 ```
@@ -205,10 +217,16 @@ sudo apt install postgresql postgresql-contrib
 ```
 
 **When to use it:**
-- Node.js/Express backends (pairs well with Prisma or Knex)
-- Projects using TypeScript + Prisma (your DIETA setup uses this)
+- Node.js/Express backends with Prisma or Knex (your DIETA project uses this)
 - When you need JSON columns, arrays, or advanced indexing
 - Anything going to production on a serious stack
+
+**`.env` connection string:**
+```
+DATABASE_URL=postgresql://postgres:password@localhost:5432/mydb
+# Prisma format:
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/mydb?schema=public"
+```
 
 **Key files:**
 - Config: `/etc/postgresql/<version>/main/postgresql.conf`
@@ -216,41 +234,53 @@ sudo apt install postgresql postgresql-contrib
 
 **Common commands:**
 ```bash
-sudo -u postgres psql          # open psql shell
-\l                             # list databases
+sudo -u postgres psql
+\l                        # list databases
 CREATE DATABASE myapp;
-\c myapp                       # connect to a database
+\c myapp                  # connect
+\dt                       # list tables
 ```
 
 ---
 
 ### 🍃 MongoDB
 
-A **document database** — stores data as JSON-like documents instead of rows and columns. Schema is flexible; each document can have different fields.
+A **document database** — stores data as JSON-like documents instead of rows and columns. Schema is flexible; documents in the same collection can have different fields.
 
 **Install:**
 ```bash
-# Import the MongoDB GPG key and repo first
-curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc \
+  | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
+  https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" \
+  | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
 sudo apt update && sudo apt install -y mongodb-org
 ```
 
 **When to use it:**
-- Node.js/Express APIs (pairs naturally with Mongoose)
-- Projects where the data shape changes often
-- Your HR Attendance API and TRISHA backend use MongoDB Atlas — run a local instance during development to avoid hitting your cloud quota
+- Node.js/Express APIs with Mongoose
+- Projects where the data shape changes often (rapid prototyping)
+- Your TRISHA backend and HR Attendance API use MongoDB Atlas — run a local instance during development to avoid hitting your cloud quota
+
+**`.env` connection string:**
+```
+MONGODB_URI=mongodb://localhost:27017/mydb
+# With auth:
+MONGODB_URI=mongodb://user:password@localhost:27017/mydb
+```
 
 **Key files:**
 - Config: `/etc/mongod.conf`
 - Data: `/var/lib/mongodb/`
+- Logs: `/var/log/mongodb/mongod.log`
 
 **Common commands:**
 ```bash
-mongosh                        # open MongoDB shell
+mongosh
 show dbs
 use myapp
 db.users.find()
+db.users.insertOne({ name: "Ian" })
 ```
 
 ---
@@ -265,21 +295,29 @@ sudo apt install redis-server
 ```
 
 **When to use it:**
-- Caching expensive database queries (store the result in Redis for 60 seconds, skip the DB hit)
-- Storing session tokens / JWT blocklists
+- Caching expensive database queries (store result in Redis with a TTL, skip the DB hit)
+- Storing session tokens or JWT blocklists
 - Rate limiting API endpoints (increment a counter per IP per minute)
-- Background job queues (with BullMQ or similar)
+- Background job queues (BullMQ, Agenda)
+
+**`.env` connection string:**
+```
+REDIS_URL=redis://localhost:6379
+# With password:
+REDIS_URL=redis://:password@localhost:6379
+```
 
 **Key files:**
 - Config: `/etc/redis/redis.conf`
 
 **Common commands:**
 ```bash
-redis-cli                      # open Redis shell
+redis-cli
 SET mykey "hello"
 GET mykey
-TTL mykey                      # check time-to-live
-KEYS *                         # list all keys (avoid on production)
+TTL mykey
+KEYS *               # list all keys (avoid on production)
+FLUSHDB              # clear current database
 ```
 
 ---
@@ -290,28 +328,27 @@ A **container runtime** — packages an app and all its dependencies into an iso
 
 **Install:**
 ```bash
-# Official Docker install (recommended over apt version)
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER   # run Docker without sudo (re-login after)
+sudo usermod -aG docker $USER    # run Docker without sudo (re-login after)
 ```
 
 **When to use it:**
-- Running a database without installing it natively (e.g. `docker run -d -p 5432:5432 postgres`)
+- Running databases without installing them natively (`docker run -d -p 5432:5432 postgres`)
 - Keeping projects isolated from your host system
-- Deploying apps — build an image once, run anywhere
-- Running third-party tools (Adminer, pgAdmin, Mailhog) without polluting your system
+- Deploying apps — build an image once, run it anywhere
+- Running GUI tools (Adminer, pgAdmin, Mongo Express, Mailhog) without polluting your machine
 
 **Key commands:**
 ```bash
-docker ps                            # list running containers
-docker images                        # list local images
-docker run -d -p 3306:3306 mysql     # run MySQL in a container
-docker compose up -d                 # start all services from docker-compose.yml
-docker compose down                  # stop and remove containers
-docker logs <container>              # view container output
+docker ps                          # list running containers
+docker images                      # list local images
+docker compose up -d               # start all services from docker-compose.yml
+docker compose down                # stop and remove containers
+docker logs <container>            # view container output
+docker exec -it <container> bash   # shell into a running container
 ```
 
-**docker-compose.yml example** for a Node + MongoDB + Redis stack:
+**docker-compose.yml example** (Node + MongoDB + Redis):
 ```yaml
 services:
   app:
@@ -321,6 +358,9 @@ services:
     depends_on:
       - mongo
       - redis
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/mydb
+      - REDIS_URL=redis://redis:6379
 
   mongo:
     image: mongo:7
@@ -342,14 +382,14 @@ volumes:
 
 ### ⚡ Nginx
 
-A high-performance **web server and reverse proxy**. In local dev and production, it sits in front of your apps and routes traffic to them.
+A high-performance **web server and reverse proxy**. Sits in front of your apps and routes public traffic to them.
 
 **Install:**
 ```bash
 sudo apt install nginx
 ```
 
-**When to use it:**
+**Common uses:**
 
 **Reverse proxy** — expose your Node app on port 80 instead of 3000:
 ```nginx
@@ -359,8 +399,11 @@ server {
 
     location / {
         proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+        proxy_cache_bypass $http_upgrade;
     }
 }
 ```
@@ -379,12 +422,6 @@ server {
 }
 ```
 
-**Multiple projects on one machine:**
-```nginx
-server { server_name api.yourdomain.com;  location / { proxy_pass http://localhost:3000; } }
-server { server_name app.yourdomain.com;  root /var/www/frontend/dist; location / { try_files $uri /index.html; } }
-```
-
 **SSL with Let's Encrypt (free):**
 ```bash
 sudo apt install certbot python3-certbot-nginx
@@ -393,12 +430,12 @@ sudo certbot --nginx -d yourdomain.com
 
 **Key commands:**
 ```bash
-sudo nginx -t                  # test config for syntax errors
-sudo systemctl reload nginx    # apply config changes without downtime
-sudo nginx -s reload           # alternative reload
+sudo nginx -t                    # test config before applying
+sudo systemctl reload nginx      # apply config without downtime
 ```
 
 **Key paths:**
+
 | Path | Purpose |
 |---|---|
 | `/etc/nginx/nginx.conf` | Main config |
@@ -407,7 +444,7 @@ sudo nginx -s reload           # alternative reload
 | `/var/log/nginx/access.log` | All incoming requests |
 | `/var/log/nginx/error.log` | Errors and warnings |
 
-**Activate a site config:**
+**Activate a config:**
 ```bash
 sudo ln -s /etc/nginx/sites-available/myapp /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
@@ -415,18 +452,43 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
+### 📂 FileZilla
+
+A **FTP/SFTP client** for transferring files between your local machine and remote servers. Not a system service — it's a regular desktop app. The panel has a dedicated launcher button for it.
+
+**Install:**
+```bash
+sudo apt install filezilla
+```
+
+**When to use it:**
+- Uploading build artifacts to a VPS manually
+- Managing files on a remote server over SFTP (more visual than `scp`)
+- Browsing and editing remote files during deployment debugging
+- Connecting to hosting providers that only offer FTP access
+
+**Quick connect:** In FileZilla, use the quickconnect bar at the top:
+- Host: `sftp://your-server-ip`
+- Username / Password: your SSH credentials
+- Port: `22` (SFTP) or `21` (FTP)
+
+> For VPS access, SFTP over port 22 is the secure choice. FTP (port 21) sends credentials in plaintext — avoid it unless the server forces it.
+
+---
+
 ## Recommended local dev setup
 
-For a typical Node.js full-stack project, you generally only need a few services running at once:
+Only run what the current project actually needs:
 
 | Stack | Services to run |
 |---|---|
-| Node + MongoDB (e.g. TRISHA backend) | MongoDB, Redis (optional for sessions), Nginx (if testing proxy) |
-| Node + PostgreSQL (e.g. DIETA) | PostgreSQL, Redis (optional), Nginx (optional) |
-| Fully containerized project | Docker only — everything else runs inside containers |
-| Frontend only (Vite dev server) | Nothing — Vite handles its own dev server |
+| Node + MongoDB (e.g. TRISHA backend) | MongoDB, Redis (optional) |
+| Node + PostgreSQL + Prisma (e.g. DIETA) | PostgreSQL, Redis (optional) |
+| Fully containerized project | Docker only |
+| Frontend only (Vite dev server) | Nothing — Vite handles its own server |
+| Deploying / testing a domain locally | Nginx + your backend service |
 
-> **Tip:** Keep autostart disabled for everything you don't use daily. Start only what the current project needs. This keeps your machine fast and avoids port conflicts between projects.
+> Keep autostart **disabled** for everything you don't use daily. Start only what the current project needs — this keeps RAM free and avoids port conflicts across projects.
 
 ---
 
@@ -436,39 +498,48 @@ For a typical Node.js full-stack project, you generally only need a few services
 
 The service binary isn't on your system yet. Install it using the commands in the relevant section above, then click **↻ Refresh All**.
 
-### pkexec popup doesn't appear
+### Port shows ○ but status shows running
 
-On some setups `pkexec` requires a running polkit agent. If the popup never shows:
+The service started but crashed immediately (common with config errors). Check the logs with the **📋 logs** button, or run:
 
 ```bash
-# Check if polkit is running
-systemctl status polkit
+sudo journalctl -u <service> -n 30 --no-pager
+```
 
-# Start it if needed
+### pkexec popup doesn't appear
+
+On some setups `pkexec` requires a running polkit agent:
+
+```bash
+systemctl status polkit
 sudo systemctl start polkit
 ```
 
-### Port already in use
+### Port already in use at startup
 
-If a service fails to start, another process may be on its port:
+If a service fails to start, something else may already be on its port:
 
 ```bash
-sudo ss -tulpn | grep <port>   # e.g. grep 3306 for MySQL
+sudo ss -tulpn | grep <port>    # e.g. grep 3306 for MySQL
 ```
 
-Kill the process or stop the conflicting service first.
+Kill the conflicting process or stop the other service first.
 
 ### Log window shows no output
 
-Some services write to their own log files instead of journald. Check:
+Some services write to their own log files instead of journald:
 
 ```bash
-# MySQL
 sudo tail -f /var/log/mysql/error.log
-
-# Nginx
 sudo tail -f /var/log/nginx/error.log
-
-# MongoDB
 sudo tail -f /var/log/mongodb/mongod.log
-```# LinuxServiceControlPanel
+```
+
+### FileZilla shows "not installed" when clicked
+
+Install it:
+```bash
+sudo apt install filezilla
+```
+
+Then click the button again — no panel restart needed.
