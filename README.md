@@ -260,7 +260,7 @@ sudo apt update && sudo apt install -y mongodb-org
 **When to use it:**
 - Node.js/Express APIs with Mongoose
 - Projects where the data shape changes often (rapid prototyping)
-- Your TRISHA backend and HR Attendance API use MongoDB Atlas — run a local instance during development to avoid hitting your cloud quota
+- Your ****** backend and HR Attendance API use MongoDB Atlas — run a local instance during development to avoid hitting your cloud quota
 
 **`.env` connection string:**
 ```
@@ -482,7 +482,7 @@ Only run what the current project actually needs:
 
 | Stack | Services to run |
 |---|---|
-| Node + MongoDB (e.g. TRISHA backend) | MongoDB, Redis (optional) |
+| Node + MongoDB (e.g. ****** backend) | MongoDB, Redis (optional) |
 | Node + PostgreSQL + Prisma (e.g. DIETA) | PostgreSQL, Redis (optional) |
 | Fully containerized project | Docker only |
 | Frontend only (Vite dev server) | Nothing — Vite handles its own server |
