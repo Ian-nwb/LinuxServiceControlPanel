@@ -2,13 +2,11 @@
 import subprocess
 import threading
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import scrolledtext
 import time
 import socket
-import re
 
 # ── Service definitions ───────────────────────────────────────────────────────
-# (label, systemd_service, icon, default_port)   port=None → no port check
 SERVICES = [
     ("MySQL",      "mysql",        "🐬", 3306),
     ("PostgreSQL", "postgresql",   "🐘", 5432),
@@ -16,6 +14,15 @@ SERVICES = [
     ("Redis",      "redis-server", "🔴", 6379),
     ("Docker",     "docker",       "🐳", None),
     ("Nginx",      "nginx",        "⚡", 80),
+]
+
+# App launchers: (label, icon, command, accent_color)
+APP_LAUNCHERS = [
+    ("FileZilla",  "📂", "filezilla",              "#7dcfff"),
+    ("VS Code",    "🖊",  "code",                   "#7aa2f7"),
+    ("Obsidian",   "🔮", "obsidian",               "#bb9af7"),
+    ("Postman",    "📮", "postman",                 "#ff9e64"),
+    ("Antigravity","🚀", "com.anticyclone.Antigravity", "#f7768e"),
 ]
 
 # ── Tokyo Night palette ───────────────────────────────────────────────────────
@@ -34,12 +41,15 @@ DISABLED = "#414868"
 ACCENT   = "#7aa2f7"
 PURPLE   = "#bb9af7"
 CYAN     = "#7dcfff"
-WARN     = "#ff9e64"
 
 FONT_LABEL = ("Sans", 10)
 FONT_TITLE = ("Sans", 13, "bold")
 FONT_SMALL = ("Mono", 8)
 FONT_BOLD  = ("Mono", 9, "bold")
+
+# ── Column layout (col index → pixel width for header labels) ─────────────────
+# 0:dot 1:name 2:status 3:port 4:uptime 5:cpu 6:ram 7:chk 8:start 9:stop 10:restart 11:logs
+COL_WIDTHS = [14, 110, 95, 80, 60, 50, 60, 52, 62, 55, 68, 55]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -58,12 +68,10 @@ def is_enabled(svc):
     r = run(["systemctl", "is-enabled", svc])
     return r.stdout.strip() == "enabled"
 
-def toggle_enabled(svc, enable: bool):
-    action = "enable" if enable else "disable"
-    subprocess.run(["pkexec", "systemctl", action, svc])
+def toggle_enabled(svc, enable):
+    subprocess.run(["pkexec", "systemctl", "enable" if enable else "disable", svc])
 
 def port_bound(port):
-    """True if something is listening on localhost:port."""
     if port is None:
         return None
     try:
@@ -91,24 +99,21 @@ def get_uptime(svc):
         return ""
 
 def get_cpu_ram(svc):
-    """Return (cpu_str, ram_str) from systemctl show."""
     r = run(["systemctl", "show", svc,
              "--property=CPUUsageNSec",
              "--property=MemoryCurrent"])
     cpu_str = ram_str = "—"
     for line in r.stdout.splitlines():
         if line.startswith("MemoryCurrent="):
-            val = line.split("=", 1)[1].strip()
             try:
-                b = int(val)
+                b = int(line.split("=", 1)[1].strip())
                 if b > 0:
-                    ram_str = f"{b/1024/1024:.1f}M" if b < 1073741824 else f"{b/1024/1024/1024:.1f}G"
+                    ram_str = f"{b/1048576:.1f}M" if b < 1073741824 else f"{b/1073741824:.1f}G"
             except ValueError:
                 pass
         elif line.startswith("CPUUsageNSec="):
-            val = line.split("=", 1)[1].strip()
             try:
-                ns = int(val)
+                ns = int(line.split("=", 1)[1].strip())
                 if ns > 0:
                     cpu_str = f"{ns/1e9:.1f}s"
             except ValueError:
@@ -123,14 +128,14 @@ def get_journal(svc, lines=60):
 
 # ── Pulsing dot ───────────────────────────────────────────────────────────────
 class PulseDot(tk.Canvas):
-    def __init__(self, parent, **kw):
-        super().__init__(parent, width=14, height=14, bg=PANEL,
-                         highlightthickness=0, **kw)
-        self._color  = MUTED
-        self._alpha  = 1.0
-        self._dir    = -1
+    def __init__(self, parent, bg=PANEL):
+        super().__init__(parent, width=14, height=14, bg=bg,
+                         highlightthickness=0)
+        self._color   = MUTED
+        self._alpha   = 1.0
+        self._dir     = -1
         self._pulsing = False
-        self._dot = self.create_oval(2, 2, 12, 12, fill=self._color, outline="")
+        self._dot     = self.create_oval(2, 2, 12, 12, fill=self._color, outline="")
         self._tick()
 
     def set_color(self, color, pulse=False):
@@ -147,10 +152,10 @@ class PulseDot(tk.Canvas):
             elif self._alpha >= 1.0: self._dir = -1
             try:
                 r, g, b = self.winfo_rgb(self._color)
-                r = int((r/65535)*self._alpha*255)
-                g = int((g/65535)*self._alpha*255)
-                b = int((b/65535)*self._alpha*255)
-                self.itemconfig(self._dot, fill=f"#{r:02x}{g:02x}{b:02x}")
+                self.itemconfig(self._dot, fill=(
+                    f"#{int(r/65535*self._alpha*255):02x}"
+                    f"{int(g/65535*self._alpha*255):02x}"
+                    f"{int(b/65535*self._alpha*255):02x}"))
             except Exception:
                 pass
         self.after(60, self._tick)
@@ -189,13 +194,9 @@ class LogWindow(tk.Toplevel):
         self.txt.delete("1.0", "end")
         for line in logs.splitlines():
             low = line.lower()
-            tag = ""
-            if any(w in low for w in ("error", "failed", "fatal", "crit")):
-                tag = "err"
-            elif any(w in low for w in ("warn", "notice")):
-                tag = "warn"
-            elif any(w in low for w in ("start", "ready", "success", "listening")):
-                tag = "ok"
+            tag = ("err"  if any(w in low for w in ("error","failed","fatal","crit")) else
+                   "warn" if any(w in low for w in ("warn","notice")) else
+                   "ok"   if any(w in low for w in ("start","ready","success","listening")) else "")
             self.txt.insert("end", line + "\n", tag)
         self.txt.config(state="disabled")
         self.txt.see("end")
@@ -204,88 +205,89 @@ class LogWindow(tk.Toplevel):
 # ── Service row ───────────────────────────────────────────────────────────────
 class Row:
     def __init__(self, parent, row, label, svc, icon, port, log_cb, toggle_cb):
-        self.svc      = svc
-        self.label    = label
-        self.port     = port
-        self._log_cb  = log_cb
-        self._tog_cb  = toggle_cb
+        self.svc        = svc
+        self.label      = label
+        self.port       = port
+        self._log_cb    = log_cb
+        self._tog_cb    = toggle_cb
         self._installed = True
-        self._enabled_state = False
 
-        col = 0
+        def cell(col, widget):
+            widget.grid(row=row, column=col, sticky="w",
+                        padx=(6 if col == 0 else 2), pady=5)
+            return widget
 
-        # ── pulse dot
+        # 0 dot
         self.dot = PulseDot(parent)
-        self.dot.grid(row=row, column=col, padx=(8, 2), pady=7); col += 1
+        cell(0, self.dot)
 
-        # ── service name
-        tk.Label(parent, text=f"{icon}  {label}", font=FONT_LABEL,
-                 fg=FG, bg=PANEL, anchor="w", width=12)\
-            .grid(row=row, column=col, sticky="w"); col += 1
+        # 1 name
+        cell(1, tk.Label(parent, text=f"{icon}  {label}", font=FONT_LABEL,
+                         fg=FG, bg=PANEL, anchor="w", width=11))
 
-        # ── status
+        # 2 status
         self.status_var = tk.StringVar(value="checking…")
         self.status_lbl = tk.Label(parent, textvariable=self.status_var,
-                                   font=FONT_BOLD, fg=MUTED,
-                                   bg=PANEL, anchor="w", width=11)
-        self.status_lbl.grid(row=row, column=col, sticky="w", padx=2); col += 1
+                                   font=FONT_BOLD, fg=MUTED, bg=PANEL,
+                                   anchor="w", width=10)
+        cell(2, self.status_lbl)
 
-        # ── port indicator
+        # 3 port
         self.port_var = tk.StringVar(value="")
         self.port_lbl = tk.Label(parent, textvariable=self.port_var,
-                                 font=FONT_SMALL, fg=MUTED,
-                                 bg=PANEL, anchor="w", width=9)
-        self.port_lbl.grid(row=row, column=col, sticky="w", padx=2); col += 1
+                                 font=FONT_SMALL, fg=MUTED, bg=PANEL,
+                                 anchor="w", width=9)
+        cell(3, self.port_lbl)
 
-        # ── uptime
+        # 4 uptime
         self.uptime_var = tk.StringVar(value="")
-        tk.Label(parent, textvariable=self.uptime_var,
-                 font=FONT_SMALL, fg=MUTED, bg=PANEL, anchor="w", width=7)\
-            .grid(row=row, column=col, sticky="w"); col += 1
+        cell(4, tk.Label(parent, textvariable=self.uptime_var,
+                         font=FONT_SMALL, fg=MUTED, bg=PANEL,
+                         anchor="w", width=6))
 
-        # ── CPU
+        # 5 cpu
         self.cpu_var = tk.StringVar(value="")
-        tk.Label(parent, textvariable=self.cpu_var,
-                 font=FONT_SMALL, fg=PURPLE, bg=PANEL, anchor="w", width=6)\
-            .grid(row=row, column=col, sticky="w"); col += 1
+        cell(5, tk.Label(parent, textvariable=self.cpu_var,
+                         font=FONT_SMALL, fg=PURPLE, bg=PANEL,
+                         anchor="w", width=5))
 
-        # ── RAM
+        # 6 ram
         self.ram_var = tk.StringVar(value="")
-        tk.Label(parent, textvariable=self.ram_var,
-                 font=FONT_SMALL, fg=CYAN, bg=PANEL, anchor="w", width=7)\
-            .grid(row=row, column=col, sticky="w"); col += 1
+        cell(6, tk.Label(parent, textvariable=self.ram_var,
+                         font=FONT_SMALL, fg=CYAN, bg=PANEL,
+                         anchor="w", width=7))
 
-        # ── autostart checkbox
+        # 7 autostart checkbox  ← fixed: no text label, just the box + inline tag
         self.auto_var = tk.BooleanVar(value=False)
         self.auto_chk = tk.Checkbutton(
-            parent, variable=self.auto_var,
-            text="auto", font=FONT_SMALL,
-            fg=MUTED, bg=PANEL, selectcolor=BG3,
-            activebackground=PANEL, activeforeground=FG,
-            command=self._on_toggle, cursor="hand2")
-        self.auto_chk.grid(row=row, column=col, padx=4); col += 1
+            parent, variable=self.auto_var, text="auto",
+            font=("Sans", 8), fg=MUTED, bg=PANEL,
+            selectcolor=BG3, activebackground=PANEL,
+            activeforeground=FG, command=self._on_toggle, cursor="hand2",
+            indicatoron=True, bd=0, highlightthickness=0)
+        cell(7, self.auto_chk)
 
-        # ── action buttons
-        def mkbtn(text, cmd, w=7):
+        # 8–11 action buttons
+        def mkbtn(text, cmd):
             return tk.Button(parent, text=text, command=cmd,
                              bg=BG3, fg=FG2, activebackground=ACCENT,
                              activeforeground=BG, relief="flat", bd=0,
-                             padx=5, pady=3, font=("Sans", 9),
-                             cursor="hand2", width=w)
+                             padx=5, pady=2, font=("Sans", 9), cursor="hand2")
 
         self.start_btn   = mkbtn("▶ start",   lambda: self.act("start"))
         self.stop_btn    = mkbtn("■ stop",    lambda: self.act("stop"))
         self.restart_btn = mkbtn("↺ restart", lambda: self.act("restart"))
         self.log_btn     = mkbtn("📋 logs",   lambda: self._log_cb(svc, label))
 
-        self.start_btn.grid(row=row,   column=col,   padx=2); col += 1
-        self.stop_btn.grid(row=row,    column=col,   padx=2); col += 1
-        self.restart_btn.grid(row=row, column=col,   padx=2); col += 1
-        self.log_btn.grid(row=row,     column=col,   padx=(2, 8))
+        for c, b in zip(range(8, 12),
+                        [self.start_btn, self.stop_btn,
+                         self.restart_btn, self.log_btn]):
+            b.grid(row=row, column=c, padx=2, pady=5, sticky="w")
 
         self._all_btns = [self.start_btn, self.stop_btn,
                           self.restart_btn, self.log_btn]
 
+    # ── checkbox toggle
     def _on_toggle(self):
         want = self.auto_var.get()
         self._set_buttons(False)
@@ -295,14 +297,12 @@ class Row:
     def _do_toggle(self, want):
         self._tog_cb(self.svc, want)
         time.sleep(0.4)
-        # re-read actual state
         actual = is_enabled(self.svc)
         self.auto_var.set(actual)
-        self.auto_chk.config(
-            fg=CYAN if actual else MUTED,
-            state="normal")
+        self.auto_chk.config(fg=CYAN if actual else MUTED, state="normal")
         self._set_buttons(True)
 
+    # ── service control
     def act(self, action):
         self.status_var.set("working…")
         self.status_lbl.config(fg=WORKING)
@@ -340,90 +340,91 @@ class Row:
         active  = is_active(self.svc)
         enabled = is_enabled(self.svc)
 
-        # status + dot
         if active:
             self.status_var.set("● running")
             self.status_lbl.config(fg=RUNNING)
             self.dot.set_color(RUNNING, pulse=True)
             self.uptime_var.set(get_uptime(self.svc))
+            cpu, ram = get_cpu_ram(self.svc)
+            self.cpu_var.set(cpu)
+            self.ram_var.set(ram)
         else:
             self.status_var.set("○ stopped")
             self.status_lbl.config(fg=STOPPED)
             self.dot.set_color(STOPPED, pulse=False)
             self.uptime_var.set("")
-
-        # port check
-        if self.port is not None:
-            bound = port_bound(self.port)
-            if bound:
-                self.port_var.set(f":{self.port} ●")
-                self.port_lbl.config(fg=RUNNING)
-            else:
-                self.port_var.set(f":{self.port} ○")
-                self.port_lbl.config(fg=STOPPED if active else MUTED)
-        else:
-            self.port_var.set("")
-
-        # cpu / ram
-        if active:
-            cpu, ram = get_cpu_ram(self.svc)
-            self.cpu_var.set(cpu)
-            self.ram_var.set(ram)
-        else:
             self.cpu_var.set("—")
             self.ram_var.set("—")
 
-        # autostart checkbox
-        self.auto_var.set(enabled)
-        self.auto_chk.config(
-            fg=CYAN if enabled else MUTED,
-            state="normal")
+        if self.port is not None:
+            bound = port_bound(self.port)
+            self.port_var.set(f":{self.port} {'●' if bound else '○'}")
+            self.port_lbl.config(fg=RUNNING if bound else (STOPPED if active else MUTED))
+        else:
+            self.port_var.set("")
 
+        self.auto_var.set(enabled)
+        self.auto_chk.config(fg=CYAN if enabled else MUTED, state="normal")
         self._set_buttons(True)
 
 
-# ── FileZilla launcher row ────────────────────────────────────────────────────
-class FileZillaRow:
+# ── App launcher strip ────────────────────────────────────────────────────────
+class LauncherStrip:
+    """A row of app-launch buttons sitting below the service list."""
+
     def __init__(self, parent, row):
-        col = 0
+        # thin separator
+        tk.Frame(parent, bg=BORDER, height=1)\
+            .grid(row=row, column=0, columnspan=13,
+                  sticky="ew", padx=8, pady=(4, 2))
 
-        # dot placeholder (always cyan / ready)
-        dot = tk.Canvas(parent, width=14, height=14, bg=PANEL,
-                        highlightthickness=0)
-        dot.create_oval(2, 2, 12, 12, fill=CYAN, outline="")
-        dot.grid(row=row, column=col, padx=(8, 2), pady=7); col += 1
+        strip = tk.Frame(parent, bg=PANEL)
+        strip.grid(row=row + 1, column=0, columnspan=13,
+                   sticky="ew", padx=8, pady=(2, 6))
 
-        tk.Label(parent, text="📂  FileZilla", font=FONT_LABEL,
-                 fg=FG, bg=PANEL, anchor="w", width=12)\
-            .grid(row=row, column=col, sticky="w"); col += 1
+        tk.Label(strip, text="apps", font=("Sans", 7), fg=MUTED,
+                 bg=PANEL).pack(side="left", padx=(2, 8))
 
-        self.status_var = tk.StringVar(value="launcher")
-        tk.Label(parent, textvariable=self.status_var,
-                 font=FONT_BOLD, fg=MUTED, bg=PANEL, anchor="w", width=11)\
-            .grid(row=row, column=col, sticky="w", padx=2); col += 1
+        self._labels = {}
+        for label, icon, cmd, color in APP_LAUNCHERS:
+            self._add_btn(strip, label, icon, cmd, color)
 
-        # empty spacers for port / uptime / cpu / ram / checkbox columns
-        for _ in range(5):
-            tk.Label(parent, text="", bg=PANEL, width=6)\
-                .grid(row=row, column=col); col += 1
-        tk.Label(parent, text="", bg=PANEL, width=6)\
-            .grid(row=row, column=col); col += 1  # checkbox col
+    def _add_btn(self, strip, label, icon, cmd, color):
+        frame = tk.Frame(strip, bg=PANEL)
+        frame.pack(side="left", padx=4)
 
-        # open button spans where start/stop/restart would be
-        open_btn = tk.Button(
-            parent, text="📂 open FileZilla", command=self._launch,
-            bg=BG3, fg=FG2, activebackground=PURPLE,
-            activeforeground=BG, relief="flat", bd=0,
-            padx=8, pady=3, font=("Sans", 9), cursor="hand2", width=22)
-        open_btn.grid(row=row, column=col, columnspan=3, padx=2, sticky="w")
-        col += 3
+        btn = tk.Button(
+            frame, text=f"{icon}  {label}",
+            command=lambda c=cmd, lbl=label: self._launch(c, lbl),
+            bg=BG3, fg=FG2,
+            activebackground=color, activeforeground=BG,
+            relief="flat", bd=0, padx=8, pady=4,
+            font=("Sans", 9), cursor="hand2")
+        btn.pack()
 
-    def _launch(self):
-        try:
-            subprocess.Popen(["filezilla"])
-            self.status_var.set("opening…")
-        except FileNotFoundError:
-            self.status_var.set("not installed")
+        lbl_var = tk.StringVar(value="")
+        lbl_w = tk.Label(frame, textvariable=lbl_var,
+                         font=("Sans", 7), fg=MUTED, bg=PANEL)
+        lbl_w.pack()
+        self._labels[label] = lbl_var
+
+    def _launch(self, cmd, label):
+        def _run():
+            try:
+                # try plain name first, then flatpak
+                result = subprocess.run(
+                    ["which", cmd], capture_output=True, text=True)
+                if result.returncode == 0:
+                    subprocess.Popen([cmd])
+                else:
+                    # try as flatpak app id
+                    subprocess.Popen(["flatpak", "run", cmd])
+                self._labels[label].set("opening…")
+            except FileNotFoundError:
+                self._labels[label].set("not found")
+            time.sleep(2)
+            self._labels[label].set("")
+        threading.Thread(target=_run, daemon=True).start()
 
 
 # ── Main App ──────────────────────────────────────────────────────────────────
@@ -432,46 +433,43 @@ class App:
         self.root = root
         root.title("Service Control Panel")
         root.configure(bg=BG)
-        root.geometry("1020x460")
         root.resizable(True, True)
 
         # ── header
-        hdr = tk.Frame(root, bg=BG2, pady=10)
+        hdr = tk.Frame(root, bg=BG2, pady=8)
         hdr.pack(fill="x")
         tk.Label(hdr, text="⚙  Service Control Panel",
-                 font=FONT_TITLE, fg=ACCENT, bg=BG2).pack(side="left", padx=16)
+                 font=FONT_TITLE, fg=ACCENT, bg=BG2).pack(side="left", padx=14)
         self.clock_lbl = tk.Label(hdr, text="", font=FONT_SMALL, fg=MUTED, bg=BG2)
-        self.clock_lbl.pack(side="right", padx=16)
+        self.clock_lbl.pack(side="right", padx=14)
         self._tick_clock()
 
         # ── column headers
-        headers = [
-            ("",        2),  # dot
-            ("service", 12), # name
-            ("status",  11), # status
-            ("port",    9),  # port
-            ("uptime",  7),  # uptime
-            ("cpu",     6),  # cpu
-            ("ram",     7),  # ram
-            ("boot",    6),  # checkbox
-            ("",        7),  # start
-            ("",        7),  # stop
-            ("",        7),  # restart
-            ("",        7),  # logs
-        ]
         hrow = tk.Frame(root, bg=PANEL)
         hrow.pack(fill="x")
+        headers = [
+            ("",        0),
+            ("service", 11),
+            ("status",  10),
+            ("port",    9),
+            ("uptime",  6),
+            ("cpu",     5),
+            ("ram",     7),
+            ("boot",    6),
+            ("",        0), ("",0), ("",0), ("",0),
+        ]
         for col, (text, w) in enumerate(headers):
+            kw = dict(width=w) if w else {}
             tk.Label(hrow, text=text.upper(), font=("Sans", 7), fg=MUTED,
-                     bg=PANEL, width=w, anchor="w")\
+                     bg=PANEL, anchor="w", **kw)\
                 .grid(row=0, column=col,
-                      padx=(8 if col == 0 else 2), pady=4, sticky="w")
+                      padx=(6 if col == 0 else 2), pady=3, sticky="w")
 
         tk.Frame(root, bg=BORDER, height=1).pack(fill="x")
 
         # ── service rows
         self.frame = tk.Frame(root, bg=PANEL)
-        self.frame.pack(fill="both", expand=True)
+        self.frame.pack(fill="x")
 
         self.rows = []
         for i, (label, svc, icon, port) in enumerate(SERVICES):
@@ -479,24 +477,26 @@ class App:
                     self._open_logs, self._toggle_enabled)
             self.rows.append(r)
 
-        # separator before FileZilla
+        # ── launcher strip
         n = len(SERVICES)
-        tk.Frame(self.frame, bg=BORDER, height=1)\
-            .grid(row=n, column=0, columnspan=13, sticky="ew", padx=8, pady=2)
-
-        FileZillaRow(self.frame, n + 1)
+        LauncherStrip(self.frame, n)
 
         # ── footer
-        foot = tk.Frame(root, bg=BG2, pady=6)
+        foot = tk.Frame(root, bg=BG2, pady=5)
         foot.pack(fill="x", side="bottom")
         self.summary_lbl = tk.Label(foot, text="", font=FONT_SMALL,
                                     fg=MUTED, bg=BG2)
-        self.summary_lbl.pack(side="left", padx=16)
+        self.summary_lbl.pack(side="left", padx=14)
         tk.Button(foot, text="↻  Refresh All", command=self.refresh_all,
                   bg=BG3, fg=FG2, activebackground=ACCENT, activeforeground=BG,
-                  relief="flat", bd=0, padx=10, pady=4,
+                  relief="flat", bd=0, padx=10, pady=3,
                   font=("Sans", 9), cursor="hand2")\
-            .pack(side="right", padx=12)
+            .pack(side="right", padx=10)
+
+        # size to content after first draw
+        root.update_idletasks()
+        root.minsize(root.winfo_reqwidth(), root.winfo_reqheight())
+        root.geometry(f"{root.winfo_reqwidth()}x{root.winfo_reqheight()}")
 
         self._auto_refresh()
 

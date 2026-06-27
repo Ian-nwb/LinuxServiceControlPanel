@@ -6,6 +6,8 @@ A Tokyo Night–themed desktop GUI for managing local development services on Li
 
 ## What it manages
 
+**Services** (systemctl-controlled):
+
 | Service | Icon | What it is | Default port |
 |---|---|---|---|
 | MySQL | 🐬 | Relational database | 3306 |
@@ -14,7 +16,16 @@ A Tokyo Night–themed desktop GUI for managing local development services on Li
 | Redis | 🔴 | In-memory key-value store | 6379 |
 | Docker | 🐳 | Container runtime | — |
 | Nginx | ⚡ | Web server / reverse proxy | 80 |
-| FileZilla | 📂 | FTP/SFTP client (launcher) | — |
+
+**App launchers** (one-click open, no root needed):
+
+| App | Icon | What it is |
+|---|---|---|
+| FileZilla | 📂 | FTP/SFTP file transfer client |
+| VS Code | 🖊 | Code editor |
+| Obsidian | 🔮 | Markdown knowledge base / notes |
+| Postman | 📮 | API testing and HTTP client |
+| Antigravity | 🚀 | Flatpak app (community launcher) |
 
 ---
 
@@ -46,7 +57,7 @@ which pkexec
 
 Used by the Logs window to pull service output. Comes with `systemd`, which is already on your system.
 
-### 4. FileZilla (optional)
+### 4. App launchers (all optional)
 
 Only needed if you want the FileZilla launcher row to work:
 
@@ -100,19 +111,19 @@ python3 ~/.local/bin/dbcontrol-gui.py
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
-│  ⚙  Service Control Panel                                    Friday 26 Jun 14:22 │
+│  ⚙  Service Control Panel                                    Friday 26 Jun 14:38 │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│  · SERVICE      STATUS      PORT       UPTIME  CPU    RAM    BOOT                │
-│  ● MySQL        ● running   :3306 ●    2h14m   1.2s   48.3M  ☑ auto  ▶ ■ ↺ 📋  │
-│  ○ PostgreSQL   ○ stopped   :5432 ○            —      —      ☐ auto  ▶ ■ ↺ 📋  │
-│  ● MongoDB      ● running   :27017 ●   45m     0.4s   91.0M  ☑ auto  ▶ ■ ↺ 📋  │
-│  ○ Redis        ○ stopped   :6379 ○            —      —      ☐ auto  ▶ ■ ↺ 📋  │
-│  ● Docker       ● running              3h02m   2.1s   112M   ☑ auto  ▶ ■ ↺ 📋  │
-│  ○ Nginx        ○ stopped   :80 ○              —      —      ☐ auto  ▶ ■ ↺ 📋  │
-│  ─────────────────────────────────────────────────────────────────────────────── │
-│  📂 FileZilla   launcher                                      📂 open FileZilla  │
+│  · SERVICE      STATUS      PORT      UPTIME  CPU   RAM    BOOT                  │
+│  ● MySQL        ● running   :3306 ●   2h14m   1.2s  48.3M  ☑ auto  ▶ ■ ↺ 📋   │
+│  ○ PostgreSQL   ○ stopped   :5432 ○           —     —      ☐ auto  ▶ ■ ↺ 📋   │
+│  ● MongoDB      ● running   :27017 ●  45m     0.4s  91.0M  ☑ auto  ▶ ■ ↺ 📋   │
+│  ○ Redis        ○ stopped   :6379 ○           —     —      ☐ auto  ▶ ■ ↺ 📋   │
+│  ● Docker       ● running            1h57m   3.8s  137.9M  ☑ auto  ▶ ■ ↺ 📋   │
+│  ○ Nginx        ○ stopped   :80 ○             —     —      ☐ auto  ▶ ■ ↺ 📋   │
+│  ────────────────────────────────────────────────────────────────────────────── │
+│  apps  📂 FileZilla   🖊 VS Code   🔮 Obsidian   📮 Postman   🚀 Antigravity    │
 ├──────────────────────────────────────────────────────────────────────────────────┤
-│  3/6 services running  •  last refreshed 14:22:01                  ↻ Refresh All │
+│  1/6 services running  •  last refreshed 14:38:26                  ↻ Refresh All │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -137,7 +148,13 @@ python3 ~/.local/bin/dbcontrol-gui.py
 | ■ stop | `systemctl stop <service>` |
 | ↺ restart | `systemctl restart <service>` |
 | 📋 logs | Opens a log window pulling from `journalctl` |
-| 📂 open FileZilla | Launches FileZilla as a regular app (no pkexec needed) |
+| 📂 FileZilla | Opens FileZilla (FTP/SFTP client) |
+| 🖊 VS Code | Opens Visual Studio Code |
+| 🔮 Obsidian | Opens Obsidian (notes/knowledge base) |
+| 📮 Postman | Opens Postman (API testing) |
+| 🚀 Antigravity | Opens Antigravity via Flatpak |
+
+The launcher strip is purely one-click open — no pkexec, no systemctl. If an app isn't found, its button shows `not found` briefly and clears automatically after 2 seconds.
 
 > Start/Stop/Restart and the Boot checkbox all trigger a **pkexec password popup** — this is expected. The panel never stores your password.
 
@@ -452,27 +469,77 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
+## App launchers
+
+These sit in a strip below the service rows. Each is a one-click button — no password popup, no systemctl. The panel tries to run the app directly, then falls back to Flatpak if the plain command isn't found.
+
+---
+
 ### 📂 FileZilla
 
-A **FTP/SFTP client** for transferring files between your local machine and remote servers. Not a system service — it's a regular desktop app. The panel has a dedicated launcher button for it.
+A **FTP/SFTP client** for transferring files to and from remote servers.
+
+**Install:** `sudo apt install filezilla`
+
+**When to use it:** uploading build artifacts, managing files on a VPS, connecting to hosting providers that only offer FTP.
+
+**Quick connect:** use the bar at the top — Host: `sftp://your-server-ip`, Port: `22`, then your SSH credentials. SFTP over 22 is always the secure choice over plain FTP on port 21.
+
+---
+
+### 🖊 VS Code
+
+**Visual Studio Code** — the code editor. Opens your last workspace on launch.
 
 **Install:**
 ```bash
-sudo apt install filezilla
+sudo snap install code --classic
+# or grab the .deb from https://code.visualstudio.com
 ```
 
-**When to use it:**
-- Uploading build artifacts to a VPS manually
-- Managing files on a remote server over SFTP (more visual than `scp`)
-- Browsing and editing remote files during deployment debugging
-- Connecting to hosting providers that only offer FTP access
+**Open a specific folder from terminal:**
+```bash
+code /path/to/your/project
+```
 
-**Quick connect:** In FileZilla, use the quickconnect bar at the top:
-- Host: `sftp://your-server-ip`
-- Username / Password: your SSH credentials
-- Port: `22` (SFTP) or `21` (FTP)
+---
 
-> For VPS access, SFTP over port 22 is the secure choice. FTP (port 21) sends credentials in plaintext — avoid it unless the server forces it.
+### 🔮 Obsidian
+
+A **local-first Markdown knowledge base**. All notes are plain `.md` files on your disk — no cloud lock-in.
+
+**Install:**
+```bash
+flatpak install flathub md.obsidian.Obsidian
+# or download the .deb / AppImage from https://obsidian.md
+```
+
+**When to use it:** project notes, architecture decisions, learning journals, documentation drafts before they go into the repo.
+
+---
+
+### 📮 Postman
+
+A **GUI HTTP client** for testing and exploring APIs. Build requests, inspect responses, write test scripts, and organize collections.
+
+**Install:**
+```bash
+sudo snap install postman
+# or download the tarball from https://www.postman.com/downloads
+```
+
+**When to use it:** testing your Express/Node endpoints while building them, exploring third-party APIs (e.g. OpenAI, Cloudinary) before writing code, sharing request collections with teammates.
+
+---
+
+### 🚀 Antigravity
+
+A Flatpak app launcher. The panel runs it via `flatpak run com.anticyclone.Antigravity`.
+
+**Install:**
+```bash
+flatpak install flathub com.anticyclone.Antigravity
+```
 
 ---
 
@@ -535,11 +602,6 @@ sudo tail -f /var/log/nginx/error.log
 sudo tail -f /var/log/mongodb/mongod.log
 ```
 
-### FileZilla shows "not installed" when clicked
+### An app launcher shows "not found" when clicked
 
-Install it:
-```bash
-sudo apt install filezilla
-```
-
-Then click the button again — no panel restart needed.
+Install the app using the commands in the App launchers section above, then click the button again — no panel restart needed. The panel tries the plain command name first (`filezilla`, `code`, `obsidian`, `postman`), then falls back to Flatpak automatically.
