@@ -14,6 +14,7 @@ A Tokyo Night–themed desktop GUI for managing local development services on Li
 | PostgreSQL | 🐘 | Relational database | 5432 |
 | MongoDB | 🍃 | Document database | 27017 |
 | Redis | 🔴 | In-memory key-value store | 6379 |
+| Valkey | 🗝️ | Redis-compatible open-source fork | 6380 |
 | Docker | 🐳 | Container runtime | — |
 | Nginx | ⚡ | Web server / reverse proxy | 80 |
 
@@ -277,7 +278,7 @@ sudo apt update && sudo apt install -y mongodb-org
 **When to use it:**
 - Node.js/Express APIs with Mongoose
 - Projects where the data shape changes often (rapid prototyping)
-- Your ****** backend and HR Attendance API use MongoDB Atlas — run a local instance during development to avoid hitting your cloud quota
+- Your TRISHA backend and HR Attendance API use MongoDB Atlas — run a local instance during development to avoid hitting your cloud quota
 
 **`.env` connection string:**
 ```
@@ -336,6 +337,88 @@ TTL mykey
 KEYS *               # list all keys (avoid on production)
 FLUSHDB              # clear current database
 ```
+
+---
+
+### 🗝️ Valkey
+
+A **Redis-compatible, fully open-source fork** of Redis, created after Redis changed its license in 2024. Drop-in replacement — same commands, same clients, same protocol. Run them side by side on different ports during migration.
+
+**Install:**
+```bash
+# Add the Valkey repo (Ubuntu/Debian/Mint)
+curl -fsSL https://packages.valkey.io/valkey-releases.gpg | sudo gpg --dearmor -o /usr/share/keyrings/valkey-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/valkey-archive-keyring.gpg] https://packages.valkey.io/apt $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/valkey.list
+sudo apt update && sudo apt install -y valkey
+```
+
+Valkey defaults to port **6380** in this panel (to avoid conflicting with Redis on 6379 if both are installed).
+
+**When to use it:**
+- New projects where you want a fully open-source stack with no license concerns
+- Migrating off Redis — it's a drop-in, just change the port in your `.env`
+- Running alongside Redis temporarily during a migration
+
+**`.env` connection string:**
+```
+REDIS_URL=redis://localhost:6380
+```
+
+**Key files:**
+- Config: `/etc/valkey/valkey.conf`
+
+**Common commands:**
+```bash
+valkey-cli -p 6380
+SET mykey "hello"
+GET mykey
+PING        # should return PONG
+```
+
+> All Redis clients (ioredis, redis-py, go-redis, StackExchange.Redis) work with Valkey — just point them at port 6380.
+
+---
+
+### 🗝️ Valkey
+
+A **drop-in open-source replacement for Redis**, born after Redis changed its license in 2024. Identical protocol, same commands, same clients — you can run it alongside Redis on a different port during migration.
+
+**Install:**
+```bash
+curl -fsSL https://packages.valkey.io/valkey-releases.gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/valkey-archive-keyring.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/valkey-archive-keyring.gpg] \
+  https://packages.valkey.io/apt $(lsb_release -cs) main" \
+  | sudo tee /etc/apt/sources.list.d/valkey.list
+
+sudo apt update && sudo apt install -y valkey
+```
+
+The panel uses port **6380** for Valkey by default so it coexists with Redis on 6379.
+
+**When to use it:**
+- New projects where you want a fully open-source stack with no license concerns
+- Migrating off Redis — it's a true drop-in, just change the port in your `.env`
+- Running both temporarily during a side-by-side migration
+
+**`.env` connection string:**
+```
+REDIS_URL=redis://localhost:6380
+```
+
+**Key files:**
+- Config: `/etc/valkey/valkey.conf`
+
+**Common commands:**
+```bash
+valkey-cli -p 6380
+PING           # should return PONG
+SET key "hi"
+GET key
+```
+
+> All Redis clients work with Valkey — ioredis, redis-py, go-redis, StackExchange.Redis. Just point them at port 6380.
 
 ---
 
@@ -549,7 +632,7 @@ Only run what the current project actually needs:
 
 | Stack | Services to run |
 |---|---|
-| Node + MongoDB (e.g. ****** backend) | MongoDB, Redis (optional) |
+| Node + MongoDB (e.g. TRISHA backend) | MongoDB, Redis (optional) |
 | Node + PostgreSQL + Prisma (e.g. DIETA) | PostgreSQL, Redis (optional) |
 | Fully containerized project | Docker only |
 | Frontend only (Vite dev server) | Nothing — Vite handles its own server |
