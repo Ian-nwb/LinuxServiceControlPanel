@@ -632,8 +632,8 @@ Only run what the current project actually needs:
 
 | Stack | Services to run |
 |---|---|
-| Node + MongoDB (e.g. ****** backend) | MongoDB, Redis (optional) |
-| Node + PostgreSQL + Prisma (e.g. DIETA) | PostgreSQL, Redis (optional) |
+| Node + MongoDB (e.g. ****** backend) | MongoDB, Redis/Valkey (optional) |
+| Node + PostgreSQL + Prisma (e.g. DIETA) | PostgreSQL, Redis/Valfkey (optional) |
 | Fully containerized project | Docker only |
 | Frontend only (Vite dev server) | Nothing — Vite handles its own server |
 | Deploying / testing a domain locally | Nginx + your backend service |
