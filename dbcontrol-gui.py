@@ -12,7 +12,7 @@ SERVICES = [
     ("PostgreSQL", "postgresql",   "🐘", 5432),
     ("MongoDB",    "mongod",       "🍃", 27017),
     ("Redis",      "redis-server", "🔴", 6379),
-    ("Valkey",     "valkey",       "🗝️",  6380),
+    ("Valkey",     "valkey-server", "🗝️",  6380),  # try "valkey" if this shows not installed
     ("Docker",     "docker",       "🐳", None),
     ("Nginx",      "nginx",        "⚡", 80),
 ]
