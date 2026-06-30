@@ -5,25 +5,29 @@ import tkinter as tk
 from tkinter import scrolledtext
 import time
 import socket
+import webbrowser
 
 # ── Service definitions ───────────────────────────────────────────────────────
 SERVICES = [
-    ("MySQL",      "mysql",        "🐬", 3306),
-    ("PostgreSQL", "postgresql",   "🐘", 5432),
-    ("MongoDB",    "mongod",       "🍃", 27017),
-    ("Redis",      "redis-server", "🔴", 6379),
-    ("Valkey",     "valkey-server", "🗝️",  6380),  # try "valkey" if this shows not installed
-    ("Docker",     "docker",       "🐳", None),
-    ("Nginx",      "nginx",        "⚡", 80),
+    ("MySQL",      "mysql",         "🐬", 3306),
+    ("PostgreSQL", "postgresql",    "🐘", 5432),
+    ("MongoDB",    "mongod",        "🍃", 27017),
+    ("Redis",      "redis-server",  "🔴", 6379),
+    ("Valkey",     "valkey-server", "🗝️",  6380),
+    ("Docker",     "docker",        "🐳", None),
+    ("Nginx",      "nginx",         "⚡", 80),
 ]
 
-# App launchers: (label, icon, command, accent_color)
+# App launchers: (label, icon, cmd_or_url, accent_color, is_url)
 APP_LAUNCHERS = [
-    ("FileZilla",  "📂", "filezilla",              "#7dcfff"),
-    ("VS Code",    "🖊",  "code",                   "#7aa2f7"),
-    ("Obsidian",   "🔮", "obsidian",               "#bb9af7"),
-    ("Postman",    "📮", "postman",                 "#ff9e64"),
-    ("Antigravity","🚀", "com.anticyclone.Antigravity", "#f7768e"),
+    ("FileZilla",  "📂", "filezilla",                    "#7dcfff", False),
+    ("VS Code",    "🖊",  "code",                         "#7aa2f7", False),
+    ("Obsidian",   "🔮", "obsidian",                     "#bb9af7", False),
+    ("Postman",    "📮", "postman",                       "#ff9e64", False),
+    ("Insomnia",   "😴", "insomnia",                     "#e0af68", False),
+    ("Discord",    "💬", "discord",                      "#7aa2f7", False),
+    ("Figma",      "🎨", "https://figma.com",            "#f7768e", True),
+    ("Antigravity","🚀", "com.anticyclone.Antigravity",  "#9ece6a", False),
 ]
 
 # ── Tokyo Night palette ───────────────────────────────────────────────────────
@@ -47,10 +51,6 @@ FONT_LABEL = ("Sans", 10)
 FONT_TITLE = ("Sans", 13, "bold")
 FONT_SMALL = ("Mono", 8)
 FONT_BOLD  = ("Mono", 9, "bold")
-
-# ── Column layout (col index → pixel width for header labels) ─────────────────
-# 0:dot 1:name 2:status 3:port 4:uptime 5:cpu 6:ram 7:chk 8:start 9:stop 10:restart 11:logs
-COL_WIDTHS = [14, 110, 95, 80, 60, 50, 60, 52, 62, 55, 68, 55]
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -125,6 +125,19 @@ def get_journal(svc, lines=60):
     r = run(["journalctl", "-u", svc, "-n", str(lines),
              "--no-pager", "--output=short-iso"])
     return r.stdout or "(no logs)"
+
+def open_url(url):
+    webbrowser.open(url)
+
+def open_localhost(port, status_var):
+    """Check port then open in browser, update status label."""
+    bound = port_bound(int(port))
+    if bound:
+        status_var.set(f"opening :{port}…")
+        open_url(f"http://localhost:{port}")
+    else:
+        status_var.set(f":{port} not bound ✗")
+    threading.Timer(2.5, lambda: status_var.set("")).start()
 
 
 # ── Pulsing dot ───────────────────────────────────────────────────────────────
@@ -218,47 +231,36 @@ class Row:
                         padx=(6 if col == 0 else 2), pady=5)
             return widget
 
-        # 0 dot
         self.dot = PulseDot(parent)
         cell(0, self.dot)
 
-        # 1 name
         cell(1, tk.Label(parent, text=f"{icon}  {label}", font=FONT_LABEL,
                          fg=FG, bg=PANEL, anchor="w", width=11))
 
-        # 2 status
         self.status_var = tk.StringVar(value="checking…")
         self.status_lbl = tk.Label(parent, textvariable=self.status_var,
                                    font=FONT_BOLD, fg=MUTED, bg=PANEL,
                                    anchor="w", width=10)
         cell(2, self.status_lbl)
 
-        # 3 port
         self.port_var = tk.StringVar(value="")
         self.port_lbl = tk.Label(parent, textvariable=self.port_var,
                                  font=FONT_SMALL, fg=MUTED, bg=PANEL,
                                  anchor="w", width=9)
         cell(3, self.port_lbl)
 
-        # 4 uptime
         self.uptime_var = tk.StringVar(value="")
         cell(4, tk.Label(parent, textvariable=self.uptime_var,
-                         font=FONT_SMALL, fg=MUTED, bg=PANEL,
-                         anchor="w", width=6))
+                         font=FONT_SMALL, fg=MUTED, bg=PANEL, anchor="w", width=6))
 
-        # 5 cpu
         self.cpu_var = tk.StringVar(value="")
         cell(5, tk.Label(parent, textvariable=self.cpu_var,
-                         font=FONT_SMALL, fg=PURPLE, bg=PANEL,
-                         anchor="w", width=5))
+                         font=FONT_SMALL, fg=PURPLE, bg=PANEL, anchor="w", width=5))
 
-        # 6 ram
         self.ram_var = tk.StringVar(value="")
         cell(6, tk.Label(parent, textvariable=self.ram_var,
-                         font=FONT_SMALL, fg=CYAN, bg=PANEL,
-                         anchor="w", width=7))
+                         font=FONT_SMALL, fg=CYAN, bg=PANEL, anchor="w", width=7))
 
-        # 7 autostart checkbox  ← fixed: no text label, just the box + inline tag
         self.auto_var = tk.BooleanVar(value=False)
         self.auto_chk = tk.Checkbutton(
             parent, variable=self.auto_var, text="auto",
@@ -268,7 +270,6 @@ class Row:
             indicatoron=True, bd=0, highlightthickness=0)
         cell(7, self.auto_chk)
 
-        # 8–11 action buttons
         def mkbtn(text, cmd):
             return tk.Button(parent, text=text, command=cmd,
                              bg=BG3, fg=FG2, activebackground=ACCENT,
@@ -288,7 +289,6 @@ class Row:
         self._all_btns = [self.start_btn, self.stop_btn,
                           self.restart_btn, self.log_btn]
 
-    # ── checkbox toggle
     def _on_toggle(self):
         want = self.auto_var.get()
         self._set_buttons(False)
@@ -303,7 +303,6 @@ class Row:
         self.auto_chk.config(fg=CYAN if actual else MUTED, state="normal")
         self._set_buttons(True)
 
-    # ── service control
     def act(self, action):
         self.status_var.set("working…")
         self.status_lbl.config(fg=WORKING)
@@ -371,54 +370,49 @@ class Row:
 
 # ── App launcher strip ────────────────────────────────────────────────────────
 class LauncherStrip:
-    """A row of app-launch buttons sitting below the service list."""
-
     def __init__(self, parent, row):
-        # thin separator
         tk.Frame(parent, bg=BORDER, height=1)\
             .grid(row=row, column=0, columnspan=13,
                   sticky="ew", padx=8, pady=(4, 2))
 
         strip = tk.Frame(parent, bg=PANEL)
         strip.grid(row=row + 1, column=0, columnspan=13,
-                   sticky="ew", padx=8, pady=(2, 6))
+                   sticky="ew", padx=8, pady=(2, 4))
 
         tk.Label(strip, text="apps", font=("Sans", 7), fg=MUTED,
                  bg=PANEL).pack(side="left", padx=(2, 8))
 
         self._labels = {}
-        for label, icon, cmd, color in APP_LAUNCHERS:
-            self._add_btn(strip, label, icon, cmd, color)
+        for label, icon, cmd, color, is_url in APP_LAUNCHERS:
+            self._add_btn(strip, label, icon, cmd, color, is_url)
 
-    def _add_btn(self, strip, label, icon, cmd, color):
+    def _add_btn(self, strip, label, icon, cmd, color, is_url):
         frame = tk.Frame(strip, bg=PANEL)
-        frame.pack(side="left", padx=4)
+        frame.pack(side="left", padx=3)
 
-        btn = tk.Button(
+        action = (lambda u=cmd: open_url(u)) if is_url \
+                 else (lambda c=cmd, lbl=label: self._launch(c, lbl))
+
+        tk.Button(
             frame, text=f"{icon}  {label}",
-            command=lambda c=cmd, lbl=label: self._launch(c, lbl),
+            command=action,
             bg=BG3, fg=FG2,
             activebackground=color, activeforeground=BG,
-            relief="flat", bd=0, padx=8, pady=4,
-            font=("Sans", 9), cursor="hand2")
-        btn.pack()
+            relief="flat", bd=0, padx=7, pady=4,
+            font=("Sans", 9), cursor="hand2").pack()
 
         lbl_var = tk.StringVar(value="")
-        lbl_w = tk.Label(frame, textvariable=lbl_var,
-                         font=("Sans", 7), fg=MUTED, bg=PANEL)
-        lbl_w.pack()
+        tk.Label(frame, textvariable=lbl_var,
+                 font=("Sans", 7), fg=MUTED, bg=PANEL).pack()
         self._labels[label] = lbl_var
 
     def _launch(self, cmd, label):
         def _run():
             try:
-                # try plain name first, then flatpak
-                result = subprocess.run(
-                    ["which", cmd], capture_output=True, text=True)
+                result = subprocess.run(["which", cmd], capture_output=True, text=True)
                 if result.returncode == 0:
                     subprocess.Popen([cmd])
                 else:
-                    # try as flatpak app id
                     subprocess.Popen(["flatpak", "run", cmd])
                 self._labels[label].set("opening…")
             except FileNotFoundError:
@@ -428,18 +422,117 @@ class LauncherStrip:
         threading.Thread(target=_run, daemon=True).start()
 
 
+# ── Port opener widget ────────────────────────────────────────────────────────
+class PortOpener:
+    """Type a port → check if bound → open http://localhost:<port> in browser."""
+
+    def __init__(self, parent, row):
+        tk.Frame(parent, bg=BORDER, height=1)\
+            .grid(row=row, column=0, columnspan=13,
+                  sticky="ew", padx=8, pady=(2, 2))
+
+        bar = tk.Frame(parent, bg=PANEL)
+        bar.grid(row=row + 1, column=0, columnspan=13,
+                 sticky="ew", padx=8, pady=(2, 6))
+
+        # 🌐 label
+        tk.Label(bar, text="🌐  localhost:", font=("Sans", 9),
+                 fg=MUTED, bg=PANEL).pack(side="left", padx=(2, 0))
+
+        # port entry
+        vcmd = (bar.register(lambda s: s.isdigit() and len(s) <= 5 or s == ""), "%P")
+        self._port_var = tk.StringVar()
+        self._entry = tk.Entry(
+            bar, textvariable=self._port_var,
+            width=6, font=("Mono", 10),
+            bg=BG3, fg=CYAN, insertbackground=CYAN,
+            relief="flat", bd=0, highlightthickness=1,
+            highlightcolor=ACCENT, highlightbackground=BORDER,
+            validate="key", validatecommand=vcmd)
+        self._entry.pack(side="left", padx=(0, 6), ipady=3)
+        self._entry.bind("<Return>", lambda e: self._go())
+
+        # go button
+        self._go_btn = tk.Button(
+            bar, text="↗ open",
+            command=self._go,
+            bg=ACCENT, fg=BG,
+            activebackground=CYAN, activeforeground=BG,
+            relief="flat", bd=0, padx=10, pady=3,
+            font=("Sans", 9, "bold"), cursor="hand2")
+        self._go_btn.pack(side="left", padx=(0, 10))
+
+        # quick-port buttons for common dev ports
+        tk.Label(bar, text="quick:", font=("Sans", 7),
+                 fg=MUTED, bg=PANEL).pack(side="left", padx=(4, 4))
+
+        quick_ports = [
+            ("3000", "#9ece6a"),   # React CRA / Express
+            ("3001", "#9ece6a"),   # alt React
+            ("5173", "#e0af68"),   # Vite
+            ("4000", "#bb9af7"),   # GraphQL / NestJS
+            ("8080", "#7dcfff"),   # Go / generic
+            ("8000", "#7dcfff"),   # Django / generic
+        ]
+        for port_str, color in quick_ports:
+            tk.Button(
+                bar, text=port_str,
+                command=lambda p=port_str: self._quick(p),
+                bg=BG3, fg=color,
+                activebackground=color, activeforeground=BG,
+                relief="flat", bd=0, padx=6, pady=3,
+                font=("Mono", 8), cursor="hand2")\
+                .pack(side="left", padx=2)
+
+        # status feedback label
+        self._status_var = tk.StringVar(value="")
+        tk.Label(bar, textvariable=self._status_var,
+                 font=FONT_SMALL, fg=WORKING, bg=PANEL)\
+            .pack(side="left", padx=10)
+
+    def _quick(self, port_str):
+        self._port_var.set(port_str)
+        self._go()
+
+    def _go(self):
+        raw = self._port_var.get().strip()
+        if not raw:
+            self._status_var.set("enter a port")
+            threading.Timer(2, lambda: self._status_var.set("")).start()
+            return
+        try:
+            port = int(raw)
+            if not (1 <= port <= 65535):
+                raise ValueError
+        except ValueError:
+            self._status_var.set("invalid port")
+            threading.Timer(2, lambda: self._status_var.set("")).start()
+            return
+
+        def _check():
+            bound = port_bound(port)
+            if bound:
+                self._status_var.set(f"✓ :{port} bound → opening…")
+                open_url(f"http://localhost:{port}")
+            else:
+                self._status_var.set(f"✗ :{port} not bound")
+            threading.Timer(3, lambda: self._status_var.set("")).start()
+
+        threading.Thread(target=_check, daemon=True).start()
+
+
 # ── Main App ──────────────────────────────────────────────────────────────────
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("Service Control Panel")
+        root.title("Dev Control Panel")
         root.configure(bg=BG)
         root.resizable(True, True)
 
         # ── header
         hdr = tk.Frame(root, bg=BG2, pady=8)
         hdr.pack(fill="x")
-        tk.Label(hdr, text="⚙  Service Control Panel",
+        tk.Label(hdr, text="⚙  Dev Control Panel",
                  font=FONT_TITLE, fg=ACCENT, bg=BG2).pack(side="left", padx=14)
         self.clock_lbl = tk.Label(hdr, text="", font=FONT_SMALL, fg=MUTED, bg=BG2)
         self.clock_lbl.pack(side="right", padx=14)
@@ -449,15 +542,9 @@ class App:
         hrow = tk.Frame(root, bg=PANEL)
         hrow.pack(fill="x")
         headers = [
-            ("",        0),
-            ("service", 11),
-            ("status",  10),
-            ("port",    9),
-            ("uptime",  6),
-            ("cpu",     5),
-            ("ram",     7),
-            ("boot",    6),
-            ("",        0), ("",0), ("",0), ("",0),
+            ("",        0), ("service", 11), ("status", 10), ("port", 9),
+            ("uptime",  6), ("cpu", 5),      ("ram",    7),  ("boot", 6),
+            ("", 0), ("", 0), ("", 0), ("", 0),
         ]
         for col, (text, w) in enumerate(headers):
             kw = dict(width=w) if w else {}
@@ -478,9 +565,9 @@ class App:
                     self._open_logs, self._toggle_enabled)
             self.rows.append(r)
 
-        # ── launcher strip
         n = len(SERVICES)
-        LauncherStrip(self.frame, n)
+        LauncherStrip(self.frame, n)       # n, n+1
+        PortOpener(self.frame, n + 2)      # n+2, n+3
 
         # ── footer
         foot = tk.Frame(root, bg=BG2, pady=5)
@@ -494,7 +581,6 @@ class App:
                   font=("Sans", 9), cursor="hand2")\
             .pack(side="right", padx=10)
 
-        # size to content after first draw
         root.update_idletasks()
         root.minsize(root.winfo_reqwidth(), root.winfo_reqheight())
         root.geometry(f"{root.winfo_reqwidth()}x{root.winfo_reqheight()}")

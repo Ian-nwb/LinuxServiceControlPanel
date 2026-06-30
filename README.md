@@ -26,7 +26,12 @@ A Tokyo Night–themed desktop GUI for managing local development services on Li
 | VS Code | 🖊 | Code editor |
 | Obsidian | 🔮 | Markdown knowledge base / notes |
 | Postman | 📮 | API testing and HTTP client |
+| Insomnia | 😴 | API testing client (GraphQL-friendly alternative to Postman) |
+| Discord | 💬 | Chat / voice app |
+| Figma | 🎨 | Opens figma.com directly in your browser — no install needed |
 | Antigravity | 🚀 | Flatpak app (community launcher) |
+
+**Port opener** — a small input bar below the launchers. Type any port and press **↗ open** (or hit Enter) to check if something's listening there and open it in your browser. Includes quick-tap buttons for common dev ports: `3000`, `3001`, `5173`, `4000`, `8080`, `8000`.
 
 ---
 
@@ -278,7 +283,7 @@ sudo apt update && sudo apt install -y mongodb-org
 **When to use it:**
 - Node.js/Express APIs with Mongoose
 - Projects where the data shape changes often (rapid prototyping)
-- Your ****** backend and HR Attendance API use MongoDB Atlas — run a local instance during development to avoid hitting your cloud quota
+- Your TRISHA backend and HR Attendance API use MongoDB Atlas — run a local instance during development to avoid hitting your cloud quota
 
 **`.env` connection string:**
 ```
@@ -558,6 +563,25 @@ These sit in a strip below the service rows. Each is a one-click button — no p
 
 ---
 
+## Port opener
+
+A small bar sitting below the app launchers. Type any port number and either press **Enter** or click **↗ open** — the panel checks if anything is actually listening on `localhost:<port>` and, if so, opens it in your default browser.
+
+**Quick-tap buttons** are included for the ports you'll hit constantly:
+
+| Port | Typically |
+|---|---|
+| 3000 | React (CRA) / Express |
+| 3001 | Alternate React / secondary API |
+| 5173 | Vite dev server |
+| 4000 | GraphQL / NestJS |
+| 8080 | Go, generic dev servers |
+| 8000 | Django, generic dev servers |
+
+If nothing is bound to the port you entered, the status text shows `✗ :<port> not bound` instead of opening a blank tab — saves you the "why is this not loading" moment.
+
+---
+
 ### 📂 FileZilla
 
 A **FTP/SFTP client** for transferring files to and from remote servers.
@@ -615,6 +639,40 @@ sudo snap install postman
 
 ---
 
+### 😴 Insomnia
+
+A **GUI HTTP client**, similar to Postman but with notably better native GraphQL support — request builder, schema introspection, and query history built in.
+
+**Install:**
+```bash
+sudo snap install insomnia
+# or download the .deb from https://insomnia.rest/download
+```
+
+**When to use it:** testing your GraphQL endpoints (NestJS, Apollo Server), as a lighter alternative to Postman when you don't need team collections synced to the cloud.
+
+---
+
+### 💬 Discord
+
+Chat and voice app — included here purely as a quick-launch convenience for community/team comms while you work.
+
+**Install:**
+```bash
+sudo snap install discord
+# or download the .deb from https://discord.com/download
+```
+
+---
+
+### 🎨 Figma
+
+The panel's Figma button doesn't launch a desktop app — it opens `https://figma.com` directly in your default browser via `webbrowser.open()`. No install required, no Flatpak fallback needed.
+
+**When to use it:** checking design specs, inspecting components, grabbing assets exported by your design collaborators before you build the matching UI.
+
+---
+
 ### 🚀 Antigravity
 
 A Flatpak app launcher. The panel runs it via `flatpak run com.anticyclone.Antigravity`.
@@ -632,8 +690,8 @@ Only run what the current project actually needs:
 
 | Stack | Services to run |
 |---|---|
-| Node + MongoDB (e.g. ****** backend) | MongoDB, Redis/Valkey (optional) |
-| Node + PostgreSQL + Prisma (e.g. DIETA) | PostgreSQL, Redis/Valfkey (optional) |
+| Node + MongoDB (e.g. TRISHA backend) | MongoDB, Redis (optional) |
+| Node + PostgreSQL + Prisma (e.g. DIETA) | PostgreSQL, Redis (optional) |
 | Fully containerized project | Docker only |
 | Frontend only (Vite dev server) | Nothing — Vite handles its own server |
 | Deploying / testing a domain locally | Nginx + your backend service |

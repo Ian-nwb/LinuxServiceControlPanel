@@ -35,7 +35,7 @@ chmod +x "$BIN_DIR/dbcontrol-gui.py"
 cat > "$APP_DIR/dbcontrol.desktop" << EOF2
 [Desktop Entry]
 Type=Application
-Name=Service Control Panel
+Name=Dev Control Panel
 Comment=Start/stop MySQL, PostgreSQL, MongoDB, Redis, Docker, Nginx
 Exec=python3 $BIN_DIR/dbcontrol-gui.py
 Icon=applications-system
@@ -46,7 +46,7 @@ EOF2
 chmod +x "$APP_DIR/dbcontrol.desktop"
 update-desktop-database "$APP_DIR" 2>/dev/null || true
 
-echo -e "${G}✓ installed.${N} Search \"Service Control Panel\" in your app menu, or run:"
+echo -e "${G}✓ installed.${N} Search \"Dev Control Panel\" in your app menu, or run:"
 echo -e "  ${B}python3 $BIN_DIR/dbcontrol-gui.py${N}"
 echo
 echo -e "${Y}note:${N} Start/Stop/Restart trigger a pkexec auth popup (needs root for systemctl)."
